@@ -237,6 +237,12 @@ elSim.addEventListener('click', ()=>{
     try { if (viewer.timeline) viewer.timeline.zoomTo(viewer.clock.startTime, viewer.clock.stopTime); } catch(e) {}
     viewer.scene.requestRender();
 
+    // Force the Cesium animation widget to Play (some builds stay paused)
+    if (viewer.animation && viewer.animation.viewModel) {
+      try { viewer.animation.viewModel.setShuttleRingValue && viewer.animation.viewModel.setShuttleRingValue(1.0); } catch(e) {}
+      try { viewer.animation.viewModel.playForwardViewModel && viewer.animation.viewModel.playForwardViewModel.command(); } catch(e) {}
+    }
+
     viewer.trackedEntity = satEntity;
     elStatus.textContent = 'Stato: simulazione pronta ✅';
     lastTime = null;
