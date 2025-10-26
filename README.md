@@ -113,23 +113,3 @@ Cultura digitale tra codice, orbite e immaginazione.
 
 MIT License — 2025
 Utilizzabile liberamente per fini educativi, scientifici e divulgativi.
-
----
-
-## 💬 Testo divulgativo per LinkedIn
-
-```text
-Immagina di essere davanti ai monitor della NASA.  
-Davanti a te le orbite si muovono, le coordinate cambiano,  
-e ogni secondo racconta la storia di un satellite che attraversa la notte e il giorno.  
-
-Ho sviluppato questa Progressive Web App — **CubeSat Orbit** — per visualizzare in tempo reale  
-le traiettorie dei satelliti a partire dai dati **TLE**, con telemetria attiva, punto subsolare,  
-e persino i link diretti per osservare la posizione del satellite su **Google Maps** o **OpenStreetMap**.  
-
-Tutto avviene nel browser. Nessun server, nessuna dipendenza esterna:  
-solo codice, equazioni e spazio — un piccolo laboratorio orbitale digitale firmato **pezzaliAPP.com**.  
-
-🌍 Provala qui → [https://www.alessandropezzali.it/PWA_Cesium_CubeSat_TLE/](https://www.alessandropezzali.it/PWA_Cesium_CubeSat_TLE/)  
-
-#CesiumJS #CubeSat #TLE #WebApp #PWA #SatelliteTracking #pezzaliAPP #DigitalCulture #STEM #SpaceEngineering #OpenSource
