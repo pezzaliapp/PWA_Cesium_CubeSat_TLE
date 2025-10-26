@@ -1,4 +1,4 @@
-/* Cesium TLE PWA v3 — subsolar point, terminator, telemetry */
+/* Cesium TLE PWA v3b — fixed sun code using ICRF->ECEF transform */
 'use strict';
 
 const elTLE = document.getElementById('tle');
@@ -13,7 +13,6 @@ const elLog = document.getElementById('log');
 const telemetryEl = document.getElementById('telemetry');
 const sunEl = document.getElementById('suninfo');
 
-// ------- PWA Install Prompt -------
 let deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
@@ -28,12 +27,10 @@ elInstall?.addEventListener('click', async ()=>{
   elInstall.hidden = true;
 });
 
-// ------- Service Worker -------
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
 }
 
-// ------- Cesium Viewer (no Ion token) -------
 Cesium.Ion.defaultAccessToken = undefined;
 const viewer = new Cesium.Viewer('viewer', {
   imageryProvider: new Cesium.UrlTemplateImageryProvider({
@@ -53,12 +50,10 @@ if (typeof window.satellite === 'undefined') {
   console.error('satellite.js global not found');
 }
 
-// Entities
 let satEntity = null;
 let terminator = null;
 let sunPoint = null;
 
-// Build sampled positions from TLE
 function buildPositionsFromTLE(tleLine1, tleLine2, minutes=120, stepSec=30){
   const satrec = satellite.twoline2satrec(tleLine1.trim(), tleLine2.trim());
   const start = Cesium.JulianDate.now();
@@ -76,7 +71,6 @@ function buildPositionsFromTLE(tleLine1, tleLine2, minutes=120, stepSec=30){
   return positions;
 }
 
-// Subsolar + terminator setup
 function ensureSunEntities(){
   if (!sunPoint){
     sunPoint = viewer.entities.add({
@@ -97,9 +91,15 @@ function ensureSunEntities(){
 function updateSunAndTerminator(){
   ensureSunEntities();
   const now = viewer.clock.currentTime;
-  const sunPos = Cesium.Simon1994PlanetaryPositions.computeSunPosition(now);
-  // Direction from Earth center
-  const dir = Cesium.Cartesian3.normalize(sunPos, new Cesium.Cartesian3());
+  // Sun position in Earth inertial frame (ICRF)
+  const sunIcrf = Cesium.Simon1994PlanetaryPositions.computeSunPositionInEarthInertialFrame(now);
+  // Transform to Earth-fixed (ECEF) if possible
+  const icrfToFixed = Cesium.Transforms.computeIcrfToFixedMatrix(now);
+  let sunFixed = sunIcrf;
+  if (icrfToFixed) {
+    sunFixed = Cesium.Matrix3.multiplyByVector(icrfToFixed, sunIcrf, new Cesium.Cartesian3());
+  }
+  const dir = Cesium.Cartesian3.normalize(sunFixed, new Cesium.Cartesian3());
   const ellipsoid = Cesium.Ellipsoid.WGS84;
   const sub = ellipsoid.scaleToGeodeticSurface(dir, new Cesium.Cartesian3());
   const subCarto = ellipsoid.cartesianToCartographic(sub);
@@ -108,7 +108,7 @@ function updateSunAndTerminator(){
   const latDeg = Cesium.Math.toDegrees(subCarto.latitude).toFixed(2);
   sunEl.textContent = `Subsolare: ${latDeg}°, ${lonDeg}°`;
 
-  // Build circle orthogonal to sun direction to approximate terminator
+  // Terminator approximation: great circle orthogonal to Sun vector
   const pts = [];
   const N = 240;
   const up = Cesium.Cartesian3.normalize(sub, new Cesium.Cartesian3());
@@ -116,7 +116,7 @@ function updateSunAndTerminator(){
   if (Math.abs(Cesium.Cartesian3.dot(up, tmp)) > 0.9) tmp = new Cesium.Cartesian3(0,1,0);
   const u = Cesium.Cartesian3.normalize(Cesium.Cartesian3.cross(up, tmp, new Cesium.Cartesian3()), new Cesium.Cartesian3());
   const v = Cesium.Cartesian3.cross(up, u, new Cesium.Cartesian3());
-  const R = 6378137.0; // meters
+  const R = 6378137.0;
   for (let k=0;k<N;k++){
     const ang = 2*Math.PI*k/N;
     const dirk = new Cesium.Cartesian3(
@@ -130,7 +130,6 @@ function updateSunAndTerminator(){
   terminator.polyline.positions = pts;
 }
 
-// Telemetry for satellite (approx velocity by finite diff)
 function updateTelemetry(){
   if (!satEntity) { telemetryEl.textContent = 'Altitudine: -\nVelocità: -\nPeriodo: -\nLat/Lon: -'; return; }
   const t = viewer.clock.currentTime;
@@ -139,7 +138,7 @@ function updateTelemetry(){
   const carto = Cesium.Cartographic.fromCartesian(pos);
   const lat = Cesium.Math.toDegrees(carto.latitude);
   const lon = Cesium.Math.toDegrees(carto.longitude);
-  const alt = carto.height; // m
+  const alt = carto.height;
   const t2 = Cesium.JulianDate.addSeconds(t, 1, new Cesium.JulianDate());
   const p2 = satEntity.position.getValue(t2);
   let vel = '-';
@@ -150,13 +149,11 @@ function updateTelemetry(){
   telemetryEl.textContent = `Altitudine: ${(alt/1000).toFixed(1)} km\nVelocità: ${vel}\nPeriodo: ~ (da TLE)\nLat/Lon: ${lat.toFixed(2)}°, ${lon.toFixed(2)}°`;
 }
 
-// Hook updates
 viewer.clock.onTick.addEventListener(()=>{
   updateSunAndTerminator();
   updateTelemetry();
 });
 
-// Buttons
 elSim.addEventListener('click', ()=>{
   try {
     const lines = elTLE.value.split('\n').map(s=>s.trim()).filter(Boolean);
@@ -165,21 +162,15 @@ elSim.addEventListener('click', ()=>{
     const l2 = lines[lines.length-1];
     const minutes = Math.max(1, parseInt(elMinutes.value||'120',10));
     const stepSec = Math.max(1, parseInt(elStep.value||'30',10));
-
     if (satEntity) { viewer.entities.remove(satEntity); satEntity = null; }
     const positions = buildPositionsFromTLE(l1, l2, minutes, stepSec);
-
     satEntity = viewer.entities.add({
       name: 'CubeSat',
       position: positions,
       point: { pixelSize: 8, color: Cesium.Color.CYAN, outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
-      path: {
-        show: true, leadTime: 0, trailTime: minutes*60, resolution: stepSec,
-        material: new Cesium.PolylineGlowMaterialProperty({ glowPower: 0.2, color: Cesium.Color.CYAN }),
-        width: 2
-      }
+      path: { show:true, leadTime:0, trailTime:minutes*60, resolution:stepSec,
+        material: new Cesium.PolylineGlowMaterialProperty({ glowPower: 0.2, color: Cesium.Color.CYAN }), width: 2 }
     });
-
     const start = positions._property._times[0];
     const stop  = positions._property._times[positions._property._times.length-1];
     viewer.clock.startTime = start.clone();
@@ -188,15 +179,10 @@ elSim.addEventListener('click', ()=>{
     viewer.clock.shouldAnimate = true;
     viewer.trackedEntity = satEntity;
     elStatus.textContent = 'Stato: simulazione pronta ✅';
-    elLog.textContent += '\\nSimulazione impostata. Usa Play/Pause o timeline.';
   } catch (e) {
     elStatus.textContent = 'Errore: ' + e.message;
     elLog.textContent += '\\n'+(e.stack||e.message);
   }
 });
-elPlay.addEventListener('click', ()=>{
-  viewer.clock.shouldAnimate = !viewer.clock.shouldAnimate;
-});
-elReset.addEventListener('click', ()=>{
-  viewer.clock.currentTime = viewer.clock.startTime.clone();
-});
+elPlay.addEventListener('click', ()=>{ viewer.clock.shouldAnimate = !viewer.clock.shouldAnimate; });
+elReset.addEventListener('click', ()=>{ viewer.clock.currentTime = viewer.clock.startTime.clone(); });
