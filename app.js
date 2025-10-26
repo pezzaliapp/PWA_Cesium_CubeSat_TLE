@@ -158,6 +158,7 @@ viewer.clock.onTick.addEventListener(()=>{
 
 elSim.addEventListener('click', ()=>{
   elLog.textContent += '\nSimulazione avviata…';
+  elLog.textContent += '\nSimulazione avviata…';
   try {
     const lines = elTLE.value.split('\n').map(s=>s.trim()).filter(Boolean);
     if (lines.length < 2) throw new Error('Inserisci almeno due righe TLE valide.');
@@ -176,11 +177,20 @@ elSim.addEventListener('click', ()=>{
     });
     const startNow = Cesium.JulianDate.now();
     const stopNow  = Cesium.JulianDate.addSeconds(startNow, minutes*60, new Cesium.JulianDate());
-    viewer.clock.startTime = startNow.clone();
+    // Motore clock
+    viewer.clock.startTime   = startNow.clone();
+    viewer.clock.stopTime    = stopNow.clone();
     viewer.clock.currentTime = startNow.clone();
-    viewer.clock.stopTime = stopNow.clone();
-    viewer.clock.multiplier = 60;
+    viewer.clock.clockRange  = Cesium.ClockRange.LOOP_STOP;
+    viewer.clock.multiplier  = 60;
     viewer.clock.shouldAnimate = true;
+    // UI clock (clockViewModel)
+    const vm = viewer.clockViewModel;
+    vm.startTime   = startNow.clone();
+    vm.stopTime    = stopNow.clone();
+    vm.currentTime = startNow.clone();
+    vm.multiplier  = 60;
+    vm.shouldAnimate = true;
     viewer.trackedEntity = satEntity;
     elStatus.textContent = 'Stato: simulazione pronta ✅';
     elLog.textContent += '\nSimulazione pronta. Animazione ON';
@@ -189,5 +199,17 @@ elSim.addEventListener('click', ()=>{
     elLog.textContent += '\\n'+(e.stack||e.message);
   }
 });
-elPlay.addEventListener('click', ()=>{ viewer.clock.multiplier = 60; viewer.clock.shouldAnimate = !viewer.clock.shouldAnimate; viewer.scene.requestRender(); });
-elReset.addEventListener('click', ()=>{ viewer.clock.currentTime = viewer.clock.startTime.clone(); });
+elPlay.addEventListener('click', ()=>{
+  const vm = viewer.clockViewModel;
+  vm.multiplier   = 60;
+  vm.shouldAnimate = !vm.shouldAnimate;
+  viewer.clock.multiplier   = vm.multiplier;
+  viewer.clock.shouldAnimate = vm.shouldAnimate;
+  viewer.scene.requestRender();
+});
+elReset.addEventListener('click', ()=>{
+  const vm = viewer.clockViewModel;
+  vm.currentTime = vm.startTime.clone();
+  viewer.clock.currentTime = vm.currentTime.clone();
+  viewer.scene.requestRender();
+});
