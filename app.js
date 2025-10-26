@@ -1,7 +1,6 @@
-/* Cesium TLE PWA v3b — fixed sun code using ICRF->ECEF transform */
+/* Cesium TLE PWA v4 Stable — synced clock, continuous render, logger & status */
 'use strict';
 
-// ===== v3f-logger: global error & console capture =====
 (function(){
   const stamp = new Date().toLocaleString();
   const log = (prefix, msg) => {
@@ -18,10 +17,8 @@
     const orig = console[level];
     console[level] = (...args)=>{ try{ log(`[${level.toUpperCase()}]`, args.map(a=>typeof a==='object'?JSON.stringify(a):String(a)).join(' ')); }catch(_){/*ignore*/} orig.apply(console,args); };
   });
-  log('[LOGGER]', `v3f-logger ready @ ${stamp}`);
+  log('[LOGGER]', `v4 Stable ready @ ${stamp}`);
 })();
-// ===== end v3f-logger =====
-
 
 const elTLE = document.getElementById('tle');
 const elMinutes = document.getElementById('minutes');
@@ -63,10 +60,11 @@ const viewer = new Cesium.Viewer('viewer', {
   homeButton: true, sceneModePicker: true, navigationHelpButton: false, fullscreenButton: false,
 });
 viewer.scene.globe.enableLighting = true;
-viewer.scene.requestRenderMode = false; // continuous rendering
+viewer.scene.requestRenderMode = false;
 viewer.clock.clockStep = Cesium.ClockStep.TICK_DEPENDENT;
 viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP;
 viewer.clock.multiplier = 60;
+viewer.clock.canAnimate = true;
 viewer.clock.shouldAnimate = false;
 
 if (typeof window.satellite === 'undefined') {
@@ -74,9 +72,7 @@ if (typeof window.satellite === 'undefined') {
   console.error('satellite.js global not found');
 }
 
-let satEntity = null;
-let terminator = null;
-let sunPoint = null;
+let satEntity = null, terminator = null, sunPoint = null;
 
 function buildPositionsFromTLE(tleLine1, tleLine2, minutes=120, stepSec=30, start){
   const satrec = satellite.twoline2satrec(tleLine1.trim(), tleLine2.trim());
@@ -115,14 +111,10 @@ function ensureSunEntities(){
 function updateSunAndTerminator(){
   ensureSunEntities();
   const now = viewer.clock.currentTime;
-  // Sun position in Earth inertial frame (ICRF)
   const sunIcrf = Cesium.Simon1994PlanetaryPositions.computeSunPositionInEarthInertialFrame(now);
-  // Transform to Earth-fixed (ECEF) if possible
   const icrfToFixed = Cesium.Transforms.computeIcrfToFixedMatrix(now);
   let sunFixed = sunIcrf;
-  if (icrfToFixed) {
-    sunFixed = Cesium.Matrix3.multiplyByVector(icrfToFixed, sunIcrf, new Cesium.Cartesian3());
-  }
+  if (icrfToFixed) sunFixed = Cesium.Matrix3.multiplyByVector(icrfToFixed, sunIcrf, new Cesium.Cartesian3());
   const dir = Cesium.Cartesian3.normalize(sunFixed, new Cesium.Cartesian3());
   const ellipsoid = Cesium.Ellipsoid.WGS84;
   const sub = ellipsoid.scaleToGeodeticSurface(dir, new Cesium.Cartesian3());
@@ -132,7 +124,6 @@ function updateSunAndTerminator(){
   const latDeg = Cesium.Math.toDegrees(subCarto.latitude).toFixed(2);
   sunEl.textContent = `Subsolare: ${latDeg}°, ${lonDeg}°`;
 
-  // Terminator approximation: great circle orthogonal to Sun vector
   const pts = [];
   const N = 240;
   const up = Cesium.Cartesian3.normalize(sub, new Cesium.Cartesian3());
@@ -166,30 +157,42 @@ function updateTelemetry(){
   const t2 = Cesium.JulianDate.addSeconds(t, 1, new Cesium.JulianDate());
   const p2 = satEntity.position.getValue(t2);
   let vel = '-';
-  if (p2){
-    const d = Cesium.Cartesian3.distance(pos, p2);
-    vel = d.toFixed(1)+' m/s';
-  }
+  if (p2){ const d = Cesium.Cartesian3.distance(pos, p2); vel = d.toFixed(1)+' m/s'; }
   telemetryEl.textContent = `Altitudine: ${(alt/1000).toFixed(1)} km\nVelocità: ${vel}\nPeriodo: ~ (da TLE)\nLat/Lon: ${lat.toFixed(2)}°, ${lon.toFixed(2)}°`;
+}
+
+// Frame status indicator
+let lastTime = null;
+function updateFrameStatus(){
+  const t = viewer.clock.currentTime;
+  const moved = lastTime ? Math.abs(Cesium.JulianDate.secondsDifference(t,lastTime)) > 0.01 : false;
+  lastTime = t.clone();
+  const tag = moved ? ' [Frame OK ✅]' : ' [STOP ❌]';
+  const base = (elStatus.textContent||'').replace(/\s\[.*\]$/,'');
+  elStatus.textContent = base + tag;
 }
 
 viewer.clock.onTick.addEventListener(()=>{
   updateSunAndTerminator();
   updateTelemetry();
+  updateFrameStatus();
 });
 
 elSim.addEventListener('click', ()=>{
-  elLog.textContent += '\nSimulazione avviata…';
   try {
-    const lines = elTLE.value.split('\n').map(s=>s.trim()).filter(Boolean);
+    elLog.textContent += '\\nSimulazione avviata…';
+    const lines = elTLE.value.split('\\n').map(s=>s.trim()).filter(Boolean);
     if (lines.length < 2) throw new Error('Inserisci almeno due righe TLE valide.');
     const l1 = lines[lines.length-2];
     const l2 = lines[lines.length-1];
     const minutes = Math.max(1, parseInt(elMinutes.value||'120',10));
     const stepSec = Math.max(1, parseInt(elStep.value||'30',10));
+
     if (satEntity) { viewer.entities.remove(satEntity); satEntity = null; }
+
     const startNow = Cesium.JulianDate.now();
     const positions = buildPositionsFromTLE(l1, l2, minutes, stepSec, startNow);
+
     satEntity = viewer.entities.add({
       name: 'CubeSat',
       position: positions,
@@ -197,9 +200,9 @@ elSim.addEventListener('click', ()=>{
       path: { show:true, leadTime:0, trailTime:minutes*60, resolution:stepSec,
         material: new Cesium.PolylineGlowMaterialProperty({ glowPower: 0.2, color: Cesium.Color.CYAN }), width: 2 }
     });
-    const startNow = Cesium.JulianDate.now();
+
     const stopNow  = Cesium.JulianDate.addSeconds(startNow, minutes*60, new Cesium.JulianDate());
-    // Motore clock
+
     viewer.clock.startTime   = startNow.clone();
     viewer.clock.stopTime    = stopNow.clone();
     viewer.clock.currentTime = startNow.clone();
@@ -207,7 +210,7 @@ elSim.addEventListener('click', ()=>{
     viewer.clock.multiplier  = 60;
     viewer.clock.canAnimate  = true;
     viewer.clock.shouldAnimate = true;
-    // UI clock (clockViewModel)
+
     const vm = viewer.clockViewModel;
     vm.startTime   = startNow.clone();
     vm.stopTime    = stopNow.clone();
@@ -215,9 +218,11 @@ elSim.addEventListener('click', ()=>{
     vm.multiplier  = 60;
     vm.canAnimate  = true;
     vm.shouldAnimate = true;
+
     viewer.trackedEntity = satEntity;
     elStatus.textContent = 'Stato: simulazione pronta ✅';
-    elLog.textContent += '\nSimulazione pronta. Animazione ON';
+    lastTime = null;
+    elLog.textContent += '\\nSimulazione pronta. Animazione ON';
   } catch (e) {
     elStatus.textContent = 'Errore: ' + e.message;
     elLog.textContent += '\\n'+(e.stack||e.message);

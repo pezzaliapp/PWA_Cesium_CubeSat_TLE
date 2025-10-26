@@ -1,6 +1,6 @@
 {
-  "name": "CubeSat Orbit — CesiumJS (PWA) v3b",
-  "short_name": "CubeSat Cesium v3b",
+  "name": "CubeSat Orbit — CesiumJS (PWA) v4 Stable",
+  "short_name": "CubeSat Cesium v4",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#0b1022",

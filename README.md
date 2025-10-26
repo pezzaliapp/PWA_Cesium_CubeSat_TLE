@@ -1,24 +1,20 @@
-# 🛰️ CubeSat Orbit — CesiumJS (PWA)
+# 🛰️ CubeSat Orbit — CesiumJS (PWA) v4 Stable
 
-Template pronto per GitHub Pages che mostra **orbite 3D da TLE** su globo **CesiumJS**, interamente **client‑side**.
+Versione stabile e pronta per GitHub Pages:
+- **Orbita 3D** da **TLE** con `satellite.js`
+- **Punto subsolare** + **linea del terminatore**
+- **Telemetria** (altitudine, velocità stimata, lat/lon)
+- **Logger integrato** (errori/avvisi in “Log…”)
+- **Clock sincronizzato** (TICK_DEPENDENT) e **render continuo**
 
-## ✨ Funzioni
-- Inserisci un **TLE** (Two‑Line Elements).
-- Genera una traiettoria campionata nel tempo con **satellite.js**.
-- Visualizza entità e **path animato** sul globo (timeline/animation Cesium).
-- PWA installabile (manifest + service worker).
+## Uso
+1. Incolla un TLE (due righe).
+2. Imposta durata/step e clicca **Simula**.
+3. Usa **Play/Pause** o la timeline. Lo stato mostra **[Frame OK ✅]** quando l’orologio avanza.
 
-## ⚙️ Dipendenze via CDN
-- CesiumJS (Widgets + Cesium.js)
-- satellite.js (propagatore TLE)
-
-## 🚀 Pubblicazione
-1) Carica i file in una repo GitHub.  
-2) Abilita **Settings → Pages → Deploy from branch**.  
-3) Apri l’URL. Su mobile: **Aggiungi alla schermata Home**.
-
-## 🛠️ Note
-- Usa imagery OSM senza Ion token.
-- Per grandi dataset o modelli 3D, ottimizza il caching e riduci la risoluzione.
+## Deploy (GitHub Pages)
+1. Carica l’intera cartella (o lo zip estratto) nella repo.
+2. Abilita *Settings → Pages → Deploy from branch*.
+3. Hard refresh la prima volta (cache `cesium-cubesat-v4`).
 
 MIT © 2025 — pezzaliAPP.com
