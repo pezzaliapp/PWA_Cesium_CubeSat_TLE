@@ -56,9 +56,9 @@ let satEntity = null;
 let terminator = null;
 let sunPoint = null;
 
-function buildPositionsFromTLE(tleLine1, tleLine2, minutes=120, stepSec=30){
+function buildPositionsFromTLE(tleLine1, tleLine2, minutes=120, stepSec=30, start){
   const satrec = satellite.twoline2satrec(tleLine1.trim(), tleLine2.trim());
-  const start = Cesium.JulianDate.now();
+  start = start || Cesium.JulianDate.now();
   const positions = new Cesium.SampledPositionProperty();
   for (let t=0; t<=minutes*60; t+=stepSec){
     const time = Cesium.JulianDate.addSeconds(start, t, new Cesium.JulianDate());
@@ -158,7 +158,6 @@ viewer.clock.onTick.addEventListener(()=>{
 
 elSim.addEventListener('click', ()=>{
   elLog.textContent += '\nSimulazione avviata…';
-  elLog.textContent += '\nSimulazione avviata…';
   try {
     const lines = elTLE.value.split('\n').map(s=>s.trim()).filter(Boolean);
     if (lines.length < 2) throw new Error('Inserisci almeno due righe TLE valide.');
@@ -167,7 +166,8 @@ elSim.addEventListener('click', ()=>{
     const minutes = Math.max(1, parseInt(elMinutes.value||'120',10));
     const stepSec = Math.max(1, parseInt(elStep.value||'30',10));
     if (satEntity) { viewer.entities.remove(satEntity); satEntity = null; }
-    const positions = buildPositionsFromTLE(l1, l2, minutes, stepSec);
+    const startNow = Cesium.JulianDate.now();
+    const positions = buildPositionsFromTLE(l1, l2, minutes, stepSec, startNow);
     satEntity = viewer.entities.add({
       name: 'CubeSat',
       position: positions,
@@ -183,6 +183,7 @@ elSim.addEventListener('click', ()=>{
     viewer.clock.currentTime = startNow.clone();
     viewer.clock.clockRange  = Cesium.ClockRange.LOOP_STOP;
     viewer.clock.multiplier  = 60;
+    viewer.clock.canAnimate  = true;
     viewer.clock.shouldAnimate = true;
     // UI clock (clockViewModel)
     const vm = viewer.clockViewModel;
@@ -190,6 +191,7 @@ elSim.addEventListener('click', ()=>{
     vm.stopTime    = stopNow.clone();
     vm.currentTime = startNow.clone();
     vm.multiplier  = 60;
+    vm.canAnimate  = true;
     vm.shouldAnimate = true;
     viewer.trackedEntity = satEntity;
     elStatus.textContent = 'Stato: simulazione pronta ✅';
