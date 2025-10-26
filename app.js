@@ -1,5 +1,5 @@
 /* CubeSat Orbit — CesiumJS TLE viewer (PWA shell)
- * v5 Telemetria Leggera — MIT 2025
+ * v5 Telemetria Leggera + Sole — MIT 2025
  */
 'use strict';
 
@@ -17,6 +17,8 @@ const elReset = document.getElementById('reset');
 const elStatus = document.getElementById('status');
 const elInstall = document.getElementById('btnInstall');
 const elLog = document.getElementById('log');
+const telemetryEl = document.getElementById('telemetry');
+const sunEl = document.getElementById('suninfo');
 
 // ------- PWA Install Prompt -------
 let deferredPrompt = null;
@@ -40,7 +42,6 @@ if ('serviceWorker' in navigator) {
 
 // ------- Cesium Viewer -------
 Cesium.Ion.defaultAccessToken = undefined;
-
 const viewer = new Cesium.Viewer('viewer', {
   imageryProvider: new Cesium.UrlTemplateImageryProvider({
     url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -65,9 +66,7 @@ viewer.clock.shouldAnimate = false;
 let satEntity = null;
 
 // Log helper
-function log(msg){
-  elLog.textContent = (elLog.textContent + '\n' + msg).slice(-3000);
-}
+function log(msg){ elLog.textContent = (elLog.textContent + '\n' + msg).slice(-3000); }
 
 // Build positions from TLE
 function buildPositionsFromTLE(tleLine1, tleLine2, minutes=120, stepSec=30){
@@ -136,29 +135,63 @@ elSim.addEventListener('click', ()=>{
 });
 
 // Play / Reset
-elPlay.addEventListener('click', ()=>{
-  viewer.clock.shouldAnimate = !viewer.clock.shouldAnimate;
-});
+elPlay.addEventListener('click', ()=>{ viewer.clock.shouldAnimate = !viewer.clock.shouldAnimate; });
+elReset.addEventListener('click', ()=>{ viewer.clock.currentTime = viewer.clock.startTime.clone(); });
 
-elReset.addEventListener('click', ()=>{
-  viewer.clock.currentTime = viewer.clock.startTime.clone();
-});
+// === Telemetria + Sole leggeri (non bloccanti) ===
+(function(){
+  const setText = (el, txt)=>{ if (el) el.textContent = txt; };
+  setText(telemetryEl, 'Altitudine: -\nVelocità: -\nPeriodo: -\nLat/Lon: -');
+  setText(sunEl, 'Subsolare: -\nAzimut/Elev: -');
 
-// Telemetria leggera in tempo reale
-viewer.clock.onTick.addEventListener(()=>{
-  if (!satEntity) return;
-  const pos = satEntity.position.getValue(viewer.clock.currentTime);
-  if (!pos) return;
-  const carto = Cesium.Cartographic.fromCartesian(pos);
-  const lat = Cesium.Math.toDegrees(carto.latitude).toFixed(2);
-  const lon = Cesium.Math.toDegrees(carto.longitude).toFixed(2);
-  const alt = (carto.height/1000).toFixed(1);
+  function sunECEF(jd){
+    try{
+      const JD = Cesium.JulianDate.toDate(jd).getTime()/86400000 + 2440587.5;
+      const T  = (JD - 2451545.0)/36525.0;
+      const L0 = (280.46646 + 36000.76983*T) % 360;
+      const M  = (357.52911 + 35999.05029*T) % 360;
+      const Mr = Cesium.Math.toRadians(M);
+      const C = (1.914602 - 0.004817*T - 0.000014*T*T)*Math.sin(Mr)
+              + (0.019993 - 0.000101*T)*Math.sin(2*Mr)
+              + 0.000289*Math.sin(3*Mr);
+      const lambda = Cesium.Math.toRadians((L0 + C) % 360);
+      const eps = Cesium.Math.toRadians(23.439 - 0.00000036*T);
+      const x = Math.cos(lambda), y = Math.cos(eps)*Math.sin(lambda), z = Math.sin(eps)*Math.sin(lambda);
+      const m = Cesium.Transforms.computeIcrfToFixedMatrix(jd);
+      return m ? Cesium.Matrix3.multiplyByVector(m,new Cesium.Cartesian3(x,y,z),new Cesium.Cartesian3()) : new Cesium.Cartesian3(x,y,z);
+    }catch(_){ return null; }
+  }
 
-  // Calcolo velocità stimata
-  const next = Cesium.JulianDate.addSeconds(viewer.clock.currentTime, 1, new Cesium.JulianDate());
-  const posNext = satEntity.position.getValue(next);
-  let vel = 0;
-  if (posNext) vel = Cesium.Cartesian3.distance(pos, posNext).toFixed(1);
+  viewer.clock.onTick.addEventListener(()=>{
+    try{
+      if (!satEntity) return;
+      const t = viewer.clock.currentTime;
+      const pos = satEntity.position.getValue(t);
+      if (!pos) return;
 
-  elStatus.textContent = `Lat: ${lat}°, Lon: ${lon}°, Alt: ${alt} km, Vel: ${vel} m/s`;
-});
+      const carto = Cesium.Cartographic.fromCartesian(pos);
+      const lat = Cesium.Math.toDegrees(carto.latitude).toFixed(2);
+      const lon = Cesium.Math.toDegrees(carto.longitude).toFixed(2);
+      const alt = (carto.height/1000).toFixed(1);
+
+      const t2 = Cesium.JulianDate.addSeconds(t,1,new Cesium.JulianDate());
+      const p2 = satEntity.position.getValue(t2);
+      let vel = '-'; if (p2) vel = Cesium.Cartesian3.distance(pos,p2).toFixed(1)+' m/s';
+
+      setText(telemetryEl, `Altitudine: ${alt} km\nVelocità: ${vel}\nPeriodo: ~ (da TLE)\nLat/Lon: ${lat}°, ${lon}°`);
+
+      const s = sunECEF(t);
+      if (s && sunEl){
+        const dir = Cesium.Cartesian3.normalize(s,new Cesium.Cartesian3());
+        const ell = Cesium.Ellipsoid.WGS84;
+        const sub = ell.scaleToGeodeticSurface(dir,new Cesium.Cartesian3());
+        if (sub){
+          const sc = ell.cartesianToCartographic(sub);
+          const slat = Cesium.Math.toDegrees(sc.latitude).toFixed(2);
+          const slon = Cesium.Math.toDegrees(sc.longitude).toFixed(2);
+          setText(sunEl, `Subsolare: ${slat}°, ${slon}°`);
+        }
+      }
+    }catch(_){/* ignore */}
+  });
+})();
