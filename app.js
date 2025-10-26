@@ -232,6 +232,11 @@ elSim.addEventListener('click', ()=>{
     vm.canAnimate  = true;
     vm.shouldAnimate = true;
 
+    // Rebind ViewModel to viewer.clock and resync timeline
+    try { viewer.clockViewModel = new Cesium.ClockViewModel(viewer.clock); } catch(e) {}
+    try { if (viewer.timeline) viewer.timeline.zoomTo(viewer.clock.startTime, viewer.clock.stopTime); } catch(e) {}
+    viewer.scene.requestRender();
+
     viewer.trackedEntity = satEntity;
     elStatus.textContent = 'Stato: simulazione pronta ✅';
     lastTime = null;
