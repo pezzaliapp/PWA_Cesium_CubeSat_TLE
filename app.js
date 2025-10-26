@@ -8,6 +8,7 @@ if (typeof window.satellite === 'undefined') {
   console.error('satellite.js global not found');
 }
 
+
 const elTLE = document.getElementById('tle');
 const elMinutes = document.getElementById('minutes');
 const elStep = document.getElementById('step');
