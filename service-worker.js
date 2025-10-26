@@ -1,5 +1,5 @@
 /* Cesium CubeSat — Service Worker (MIT 2025) */
-const CACHE = 'cesium-cubesat-v1';
+const CACHE = 'cesium-cubesat-v2';
 const ASSETS = [
   './',
   './index.html',
