@@ -3,26 +3,26 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-  <title>CubeSat Orbit — CesiumJS (PWA) v3b</title>
+  <title>CubeSat Orbit — CesiumJS (PWA)</title>
   <meta name="theme-color" content="#0b1022" />
-  <meta name="description" content="PWA CesiumJS: TLE → orbita 3D, subsolare/terminatore, telemetria live. Tutto client-side." />
+  <meta name="description" content="PWA installabile con globo 3D CesiumJS. Inserisci un TLE per visualizzare e animare l'orbita del tuo CubeSat." />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link href="https://cdn.jsdelivr.net/npm/cesium@1.120.0/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
   <style>
-    :root{--bg:#0b1022;--ink:#eaf1ff;--muted:#93a4cc;--card:#101739;--line:#1c2550}
-    *{box-sizing:border-box} html,body{height:100%}
+    :root{--bg:#0b1022;--ink:#eaf1ff;--muted:#93a4cc;--card:#101739;--line:#1c2550;--cta:#2dd4bf}
+    *{box-sizing:border-box}
+    html,body{height:100%}
     body{margin:0;font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial;color:var(--ink);
       background: radial-gradient(1200px 600px at 50% -20%, #172042, var(--bg));}
     header{position:sticky;top:0;background:#0e1533cc;backdrop-filter:blur(6px);
       border-bottom:1px solid var(--line);padding:12px}
-    header h1{margin:0;font-size:18px}
+    header h1{margin:0;font-size:18px;letter-spacing:.2px}
     main{max-width:1200px;margin:0 auto;padding:16px}
-    .grid{display:grid;grid-template-columns:1fr 380px;gap:16px}
+    .grid{display:grid;grid-template-columns:1fr 360px;gap:16px}
     .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:12px 0}
-    #viewer{height:70vh;width:100%;border-radius:12px;border:1px solid var(--line);overflow:hidden}
     label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
     textarea,input{width:100%;background:#0f1840;color:var(--ink);border:1px solid var(--line);
       border-radius:10px;padding:10px 12px;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace}
@@ -30,25 +30,36 @@
     button{cursor:pointer;border:1px solid var(--line);background:#0f1840;color:var(--ink);
       border-radius:10px;padding:10px 14px;margin-right:6px}
     .pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:4px 10px;margin:4px 0}
-    pre{background:#0b1230;border:1px solid var(--line);border-radius:10px;padding:12px;white-space:pre-wrap;max-height:200px;overflow:auto}
-    .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    #viewer{height:70vh;width:100%;border-radius:12px;border:1px solid var(--line);overflow:hidden}
+    pre{background:#0b1230;border:1px solid var(--line);border-radius:10px;padding:12px;overflow:auto;white-space:pre-wrap;max-height:200px}
     footer{padding:24px 16px;color:var(--muted);text-align:center}
   </style>
 </head>
 <body>
-  <header><h1>🛰️ CubeSat Orbit — CesiumJS (PWA) v3b</h1></header>
+  <header>
+    <h1>🛰️ CubeSat Orbit — CesiumJS (PWA)</h1>
+  </header>
+
   <main>
     <div class="grid">
-      <section class="card"><div id="viewer"></div></section>
       <section class="card">
-        <div class="pill">Installabile • TLE → Orbita 3D • Terminatore</div>
+        <div id="viewer"></div>
+      </section>
+      <section class="card">
+        <div class="pill">Installabile • Offline (shell) • TLE → Orbita 3D</div>
         <label for="tle">TLE (Two-Line Elements)</label>
         <textarea id="tle" spellcheck="false">ISS (ZARYA)
 1 25544U 98067A   24299.50000000  .00016717  00000-0  10270-3 0  9995
 2 25544  51.6437  28.9044 0005712  35.3822  65.1452 15.50386381445585</textarea>
-        <div class="two" style="margin-top:10px">
-          <div><label>Durata (minuti)</label><input id="minutes" type="number" value="120" min="10" max="1440" step="10"></div>
-          <div><label>Δt (secondi)</label><input id="step" type="number" value="30" min="1" max="600" step="1"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">
+          <div>
+            <label for="minutes">Durata (minuti)</label>
+            <input id="minutes" type="number" value="120" min="10" max="1440" step="10">
+          </div>
+          <div>
+            <label for="step">Δt (secondi)</label>
+            <input id="step" type="number" value="30" min="1" max="600" step="1">
+          </div>
         </div>
         <div style="margin-top:10px">
           <button id="simulate">▶️ Simula</button>
@@ -57,30 +68,25 @@
           <button id="btnInstall" hidden>➕ Installa</button>
         </div>
         <div id="status" class="pill" style="margin-top:10px">Stato: pronto</div>
-        <div class="two" style="margin-top:10px">
-          <div><strong>Telemetria</strong><pre id="telemetry">Altitudine: -
-Velocità: -
-Periodo: -
-Lat/Lon: -</pre></div>
-          <div><strong>Sole</strong><pre id="suninfo">Subsolare: -
-Azimut/Elev: -</pre></div>
-        </div>
         <pre id="log">Log…</pre>
       </section>
     </div>
+
     <section class="card">
       <h3>Note</h3>
       <ul>
-        <li>Subsolare: punto sulla Terra direttamente sotto al Sole (marker giallo).</li>
-        <li>Terminatore: linea giorno/notte (approssimata) che ruota con la luce solare.</li>
+        <li>Globo CesiumJS senza token (imagery OSM), tutto client‑side.</li>
+        <li>Propagazione TLE con <code>satellite.js</code>, campionamento nel tempo.</li>
+        <li>Path visualizzato con <code>SampledPositionProperty</code> e entità animate.</li>
       </ul>
     </section>
+
     <footer>MIT © 2025 — pezzaliAPP.com</footer>
   </main>
 
   <!-- CesiumJS -->
   <script src="https://cdn.jsdelivr.net/npm/cesium@1.120.0/Build/Cesium/Cesium.js"></script>
-  <!-- satellite.js UMD (global `satellite`) -->
+  <!-- satellite.js -->
   <script src="https://cdn.jsdelivr.net/npm/satellite.js@4.0.0/dist/satellite.min.js"></script>
 
   <!-- App -->
