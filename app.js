@@ -41,7 +41,8 @@ const viewer = new Cesium.Viewer('viewer', {
   homeButton: true, sceneModePicker: true, navigationHelpButton: false, fullscreenButton: false,
 });
 viewer.scene.globe.enableLighting = true;
-viewer.clock.clockStep = Cesium.ClockStep.SYSTEM_CLOCK_MULTIPLIER;
+viewer.scene.requestRenderMode = false; // continuous rendering
+viewer.clock.clockStep = Cesium.ClockStep.TICK_DEPENDENT;
 viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP;
 viewer.clock.multiplier = 60;
 viewer.clock.shouldAnimate = false;
@@ -156,6 +157,7 @@ viewer.clock.onTick.addEventListener(()=>{
 });
 
 elSim.addEventListener('click', ()=>{
+  elLog.textContent += '\nSimulazione avviata…';
   try {
     const lines = elTLE.value.split('\n').map(s=>s.trim()).filter(Boolean);
     if (lines.length < 2) throw new Error('Inserisci almeno due righe TLE valide.');
@@ -181,10 +183,11 @@ elSim.addEventListener('click', ()=>{
     viewer.clock.shouldAnimate = true;
     viewer.trackedEntity = satEntity;
     elStatus.textContent = 'Stato: simulazione pronta ✅';
+    elLog.textContent += '\nSimulazione pronta. Animazione ON';
   } catch (e) {
     elStatus.textContent = 'Errore: ' + e.message;
     elLog.textContent += '\\n'+(e.stack||e.message);
   }
 });
-elPlay.addEventListener('click', ()=>{ viewer.clock.multiplier = 60; viewer.clock.shouldAnimate = !viewer.clock.shouldAnimate; });
+elPlay.addEventListener('click', ()=>{ viewer.clock.multiplier = 60; viewer.clock.shouldAnimate = !viewer.clock.shouldAnimate; viewer.scene.requestRender(); });
 elReset.addEventListener('click', ()=>{ viewer.clock.currentTime = viewer.clock.startTime.clone(); });
