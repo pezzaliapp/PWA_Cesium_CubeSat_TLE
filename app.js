@@ -42,6 +42,7 @@ const viewer = new Cesium.Viewer('viewer', {
 });
 viewer.scene.globe.enableLighting = true;
 viewer.clock.clockStep = Cesium.ClockStep.SYSTEM_CLOCK_MULTIPLIER;
+viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP;
 viewer.clock.multiplier = 60;
 viewer.clock.shouldAnimate = false;
 
@@ -171,11 +172,12 @@ elSim.addEventListener('click', ()=>{
       path: { show:true, leadTime:0, trailTime:minutes*60, resolution:stepSec,
         material: new Cesium.PolylineGlowMaterialProperty({ glowPower: 0.2, color: Cesium.Color.CYAN }), width: 2 }
     });
-    const start = positions._property._times[0];
-    const stop  = positions._property._times[positions._property._times.length-1];
-    viewer.clock.startTime = start.clone();
-    viewer.clock.currentTime = start.clone();
-    viewer.clock.stopTime = stop.clone();
+    const startNow = Cesium.JulianDate.now();
+    const stopNow  = Cesium.JulianDate.addSeconds(startNow, minutes*60, new Cesium.JulianDate());
+    viewer.clock.startTime = startNow.clone();
+    viewer.clock.currentTime = startNow.clone();
+    viewer.clock.stopTime = stopNow.clone();
+    viewer.clock.multiplier = 60;
     viewer.clock.shouldAnimate = true;
     viewer.trackedEntity = satEntity;
     elStatus.textContent = 'Stato: simulazione pronta ✅';
@@ -184,5 +186,5 @@ elSim.addEventListener('click', ()=>{
     elLog.textContent += '\\n'+(e.stack||e.message);
   }
 });
-elPlay.addEventListener('click', ()=>{ viewer.clock.shouldAnimate = !viewer.clock.shouldAnimate; });
+elPlay.addEventListener('click', ()=>{ viewer.clock.multiplier = 60; viewer.clock.shouldAnimate = !viewer.clock.shouldAnimate; });
 elReset.addEventListener('click', ()=>{ viewer.clock.currentTime = viewer.clock.startTime.clone(); });
