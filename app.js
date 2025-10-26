@@ -20,6 +20,22 @@
   log('[LOGGER]', `v4 Stable ready @ ${stamp}`);
 })();
 
+
+// Robust TLE parser: accepts header + lines, CRLF, extra spaces.
+// Returns [l1, l2] or throws.
+function parseTLE(text){
+  const raw = (text||'').replace(/\r\n?/g, '\n').split('\n').map(s=>s.trim()).filter(Boolean);
+  if (raw.length < 2) throw new Error('Inserisci almeno due righe TLE valide.');
+  // Try find lines starting with 1 and 2
+  let l1 = raw.find(s=>/^1\s/.test(s));
+  let l2 = raw.find(s=>/^2\s/.test(s));
+  if (l1 && l2) return [l1, l2];
+  // Otherwise take the last two non-empty lines
+  const last2 = raw.slice(-2);
+  if (last2[0] && last2[1]) return last2;
+  throw new Error('TLE non riconosciuto (mancano righe 1/2).');
+}
+
 const elTLE = document.getElementById('tle');
 const elMinutes = document.getElementById('minutes');
 const elStep = document.getElementById('step');
@@ -181,10 +197,7 @@ viewer.clock.onTick.addEventListener(()=>{
 elSim.addEventListener('click', ()=>{
   try {
     elLog.textContent += '\\nSimulazione avviata…';
-    const lines = elTLE.value.split('\\n').map(s=>s.trim()).filter(Boolean);
-    if (lines.length < 2) throw new Error('Inserisci almeno due righe TLE valide.');
-    const l1 = lines[lines.length-2];
-    const l2 = lines[lines.length-1];
+    const [l1, l2] = parseTLE(elTLE.value);
     const minutes = Math.max(1, parseInt(elMinutes.value||'120',10));
     const stepSec = Math.max(1, parseInt(elStep.value||'30',10));
 
