@@ -1,11 +1,12 @@
 /* CubeSat Orbit — CesiumJS TLE viewer (PWA shell)
- * v5b — Telemetria + Maps link + label dinamica + micro-logger — MIT 2025
+ * v5c — iPhone camera-safe + Telemetria + Maps link + label dinamica + micro-logger — MIT 2025
  */
 'use strict';
 
 // iOS fullheight fix
-(function(){
-  const setVH = () => document.documentElement.style.setProperty('--vh', window.innerHeight * 0.01 + 'px');
+(function () {
+  const setVH = () =>
+    document.documentElement.style.setProperty('--vh', window.innerHeight * 0.01 + 'px');
   window.addEventListener('resize', setVH);
   window.addEventListener('orientationchange', setVH);
   setVH();
@@ -36,7 +37,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
   deferredPrompt = e;
   elInstall.hidden = false;
 });
-elInstall?.addEventListener('click', async ()=>{
+elInstall?.addEventListener('click', async () => {
   if (!deferredPrompt) return;
   deferredPrompt.prompt();
   await deferredPrompt.userChoice;
@@ -46,7 +47,7 @@ elInstall?.addEventListener('click', async ()=>{
 
 // ------- Service Worker -------
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
+  navigator.serviceWorker.register('./service-worker.js').catch(() => {});
 }
 
 // ------- Cesium Viewer -------
@@ -54,7 +55,7 @@ Cesium.Ion.defaultAccessToken = undefined;
 const viewer = new Cesium.Viewer('viewer', {
   imageryProvider: new Cesium.UrlTemplateImageryProvider({
     url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-    credit: '© OpenStreetMap contributors'
+    credit: '© OpenStreetMap contributors',
   }),
   terrainProvider: new Cesium.EllipsoidTerrainProvider(),
   animation: true,
@@ -66,12 +67,18 @@ const viewer = new Cesium.Viewer('viewer', {
   navigationHelpButton: false,
   fullscreenButton: false,
 });
-viewer.scene.globe.enableLighting = true;     // day/night shading
+
+viewer.scene.globe.enableLighting = true; // day/night shading
+viewer.scene.globe.show = true;
+viewer.scene.skyAtmosphere.show = true;
+
 viewer.clock.clockStep = Cesium.ClockStep.SYSTEM_CLOCK_MULTIPLIER;
 viewer.clock.multiplier = 60;
 viewer.clock.shouldAnimate = false;
 
-// iOS: assicurati che la scena si aggiorni davvero
+// iPhone safety: limiti di zoom + render continuo
+viewer.scene.screenSpaceCameraController.minimumZoomDistance = 900_000; // ≥ 900 km
+viewer.scene.screenSpaceCameraController.maximumZoomDistance = 60_000_000;
 viewer.scene.requestRenderMode = true;
 viewer.scene.maximumRenderTimeChange = Infinity;
 viewer.clock.onTick.addEventListener(() => viewer.scene.requestRender());
@@ -80,82 +87,97 @@ viewer.clock.onTick.addEventListener(() => viewer.scene.requestRender());
 let satEntity = null;
 
 // Log helper
-function log(msg){
+function log(msg) {
   elLog.textContent = (elLog.textContent + '\n' + msg).slice(-3000);
 }
 
 // Build positions from TLE
-function buildPositionsFromTLE(tleLine1, tleLine2, minutes=120, stepSec=30){
+function buildPositionsFromTLE(tleLine1, tleLine2, minutes = 120, stepSec = 30) {
   const satrec = satellite.twoline2satrec(tleLine1.trim(), tleLine2.trim());
   const start = Cesium.JulianDate.now();
   const positions = new Cesium.SampledPositionProperty();
 
-  for (let t=0; t<=minutes*60; t+=stepSec){
+  for (let t = 0; t <= minutes * 60; t += stepSec) {
     const time = Cesium.JulianDate.addSeconds(start, t, new Cesium.JulianDate());
     const jsDate = Cesium.JulianDate.toDate(time);
     const gmst = satellite.gstime(jsDate);
     const prop = satellite.propagate(satrec, jsDate);
     if (!prop.position) continue;
     const gd = satellite.eciToGeodetic(prop.position, gmst);
-    const cart = Cesium.Cartesian3.fromRadians(gd.longitude, gd.latitude, gd.height*1000);
+    const cart = Cesium.Cartesian3.fromRadians(gd.longitude, gd.latitude, gd.height * 1000);
     positions.addSample(time, cart);
   }
   return positions;
 }
 
-// --- util: Sun subsolar position (ECI->ECEF approx, no rare Cesium APIs) ---
-function sunECEF(jd){
-  try{
-    const JD = Cesium.JulianDate.toDate(jd).getTime()/86400000 + 2440587.5;
-    const T  = (JD - 2451545.0)/36525.0;
-    const L0 = (280.46646 + 36000.76983*T) % 360;
-    const M  = (357.52911 + 35999.05029*T) % 360;
+// --- util: Sun subsolar position (ECI->ECEF approx) ---
+function sunECEF(jd) {
+  try {
+    const JD = Cesium.JulianDate.toDate(jd).getTime() / 86400000 + 2440587.5;
+    const T = (JD - 2451545.0) / 36525.0;
+    const L0 = (280.46646 + 36000.76983 * T) % 360;
+    const M = (357.52911 + 35999.05029 * T) % 360;
     const Mr = Cesium.Math.toRadians(M);
-    const C = (1.914602 - 0.004817*T - 0.000014*T*T)*Math.sin(Mr)
-            + (0.019993 - 0.000101*T)*Math.sin(2*Mr)
-            + 0.000289*Math.sin(3*Mr);
+    const C =
+      (1.914602 - 0.004817 * T - 0.000014 * T * T) * Math.sin(Mr) +
+      (0.019993 - 0.000101 * T) * Math.sin(2 * Mr) +
+      0.000289 * Math.sin(3 * Mr);
     const lambda = Cesium.Math.toRadians((L0 + C) % 360);
-    const eps = Cesium.Math.toRadians(23.439 - 0.00000036*T);
-    const x = Math.cos(lambda), y = Math.cos(eps)*Math.sin(lambda), z = Math.sin(eps)*Math.sin(lambda);
+    const eps = Cesium.Math.toRadians(23.439 - 0.00000036 * T);
+    const x = Math.cos(lambda),
+      y = Math.cos(eps) * Math.sin(lambda),
+      z = Math.sin(eps) * Math.sin(lambda);
     const m = Cesium.Transforms.computeIcrfToFixedMatrix(jd);
-    return m ? Cesium.Matrix3.multiplyByVector(m,new Cesium.Cartesian3(x,y,z),new Cesium.Cartesian3())
-             : new Cesium.Cartesian3(x,y,z);
-  }catch(_){ return null; }
+    return m
+      ? Cesium.Matrix3.multiplyByVector(m, new Cesium.Cartesian3(x, y, z), new Cesium.Cartesian3())
+      : new Cesium.Cartesian3(x, y, z);
+  } catch (_) {
+    return null;
+  }
 }
 
 // Simulate
-elSim.addEventListener('click', ()=>{
+elSim.addEventListener('click', () => {
   try {
-    const lines = elTLE.value.split('\n').map(s=>s.trim()).filter(Boolean);
+    const lines = elTLE.value.split('\n').map((s) => s.trim()).filter(Boolean);
     if (lines.length < 2) throw new Error('Inserisci almeno due righe TLE valide.');
-    const l1 = lines[lines.length-2];
-    const l2 = lines[lines.length-1];
-    const minutes = Math.max(1, parseInt(elMinutes.value||'120',10));
-    const stepSec = Math.max(1, parseInt(elStep.value||'30',10));
+    const l1 = lines[lines.length - 2];
+    const l2 = lines[lines.length - 1];
+    const minutes = Math.max(1, parseInt(elMinutes.value || '120', 10));
+    const stepSec = Math.max(1, parseInt(elStep.value || '30', 10));
 
     if (satEntity) viewer.entities.remove(satEntity);
 
     const positions = buildPositionsFromTLE(l1, l2, minutes, stepSec);
 
-    // Label dinamica: alt/vel in tempo reale (non invasiva)
-    const labelText = new Cesium.CallbackProperty(function(){
-      try{
+    // Label dinamica: alt/vel in tempo reale
+    const labelText = new Cesium.CallbackProperty(function () {
+      try {
         const t = viewer.clock.currentTime;
         const p1 = satEntity?.position?.getValue(t);
         if (!p1) return '';
         const c = Cesium.Cartographic.fromCartesian(p1);
-        const alt = (c.height/1000).toFixed(0);
-        const p2 = satEntity.position.getValue(Cesium.JulianDate.addSeconds(t,1,new Cesium.JulianDate()));
+        const alt = (c.height / 1000).toFixed(0);
+        const p2 = satEntity.position.getValue(
+          Cesium.JulianDate.addSeconds(t, 1, new Cesium.JulianDate())
+        );
         let vel = '';
-        if (p2) vel = (Cesium.Cartesian3.distance(p1,p2)).toFixed(0);
+        if (p2) vel = Cesium.Cartesian3.distance(p1, p2).toFixed(0);
         return `${alt} km • ${vel} m/s`;
-      }catch(_){ return ''; }
+      } catch (_) {
+        return '';
+      }
     }, false);
 
     satEntity = viewer.entities.add({
       name: 'Sat',
       position: positions,
-      point: { pixelSize: 7, color: Cesium.Color.CYAN, outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
+      point: {
+        pixelSize: 7,
+        color: Cesium.Color.CYAN,
+        outlineColor: Cesium.Color.WHITE,
+        outlineWidth: 2,
+      },
       label: {
         text: labelText,
         showBackground: true,
@@ -164,25 +186,38 @@ elSim.addEventListener('click', ()=>{
         font: '12px sans-serif',
         pixelOffset: new Cesium.Cartesian2(0, -18),
         verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
       path: {
         show: true,
         leadTime: 0,
-        trailTime: minutes*60,
+        trailTime: minutes * 60,
         resolution: stepSec,
-        material: new Cesium.PolylineGlowMaterialProperty({ glowPower: 0.2, color: Cesium.Color.CYAN }),
-        width: 2
-      }
+        material: new Cesium.PolylineGlowMaterialProperty({
+          glowPower: 0.2,
+          color: Cesium.Color.CYAN,
+        }),
+        width: 2,
+      },
     });
 
+    // Clock range
     const start = positions._property._times[0];
-    const stop = positions._property._times[positions._property._times.length-1];
+    const stop = positions._property._times[positions._property._times.length - 1];
     viewer.clock.startTime = start.clone();
     viewer.clock.currentTime = start.clone();
     viewer.clock.stopTime = stop.clone();
     viewer.clock.shouldAnimate = true;
-    viewer.trackedEntity = satEntity;
+
+    // Inquadratura iniziale SICURA (niente tracking immediato su iPhone)
+    const safeOffset = new Cesium.HeadingPitchRange(
+      0.0,
+      Cesium.Math.toRadians(-35),
+      12_000_000 // ~12.000 km
+    );
+    viewer.trackedEntity = undefined; // evita "entrare" nel globo
+    satEntity.viewFrom = new Cesium.Cartesian3(-9_000_000, 9_000_000, 5_000_000);
+    viewer.flyTo(satEntity, { offset: safeOffset, duration: 0.0 });
 
     elStatus.textContent = 'Simulazione pronta ✅';
     log('Simulazione impostata.');
@@ -193,31 +228,42 @@ elSim.addEventListener('click', ()=>{
 });
 
 // Play / Reset
-elPlay.addEventListener('click', ()=>{ viewer.clock.shouldAnimate = !viewer.clock.shouldAnimate; });
-elReset.addEventListener('click', ()=>{ viewer.clock.currentTime = viewer.clock.startTime.clone(); });
+elPlay.addEventListener('click', () => {
+  viewer.clock.shouldAnimate = !viewer.clock.shouldAnimate;
+});
+elReset.addEventListener('click', () => {
+  viewer.clock.currentTime = viewer.clock.startTime.clone();
+});
 
-// Telemetria + Sole + Maps link + micro-logger (non bloccanti)
-(function(){
-  const setText = (el, txt)=>{ if (el) el.textContent = txt; };
+// Telemetria + Sole + Maps link + micro-logger
+(function () {
+  const setText = (el, txt) => {
+    if (el) el.textContent = txt;
+  };
   if (telemetryEl) setText(telemetryEl, 'Altitudine: -\nVelocità: -\nPeriodo: -\nLat/Lon: -');
-  if (sunEl)        setText(sunEl,        'Subsolare: -\nAzimut/Elev: -');
+  if (sunEl) setText(sunEl, 'Subsolare: -\nAzimut/Elev: -');
 
   // micro-logger FPS stimato (via postRender)
   let frameCount = 0;
-  viewer.scene.postRender.addEventListener(()=>{ frameCount++; });
-  setInterval(()=>{
-    try{
+  viewer.scene.postRender.addEventListener(() => {
+    frameCount++;
+  });
+  setInterval(() => {
+    try {
       if (!viewer.clock) return;
       const simRate = viewer.clock.multiplier; // 60x
-      const fps = frameCount/2; // aggiornamento ogni 2s
+      const fps = frameCount / 2; // aggiornamento ogni 2s
       frameCount = 0;
-      const t = Cesium.JulianDate.toDate(viewer.clock.currentTime).toISOString().replace('T',' ').replace('Z',' UTC');
+      const t = Cesium.JulianDate.toDate(viewer.clock.currentTime)
+        .toISOString()
+        .replace('T', ' ')
+        .replace('Z', ' UTC');
       log(`Tick: sim×${simRate}, ~${fps.toFixed(0)} FPS, t=${t}`);
-    }catch(_){}
+    } catch (_) {}
   }, 2000);
 
-  viewer.clock.onTick.addEventListener(()=>{
-    try{
+  viewer.clock.onTick.addEventListener(() => {
+    try {
       if (!satEntity) return;
       const t = viewer.clock.currentTime;
       const p1 = satEntity.position.getValue(t);
@@ -226,53 +272,64 @@ elReset.addEventListener('click', ()=>{ viewer.clock.currentTime = viewer.clock.
       const c = Cesium.Cartographic.fromCartesian(p1);
       const lat = Cesium.Math.toDegrees(c.latitude);
       const lon = Cesium.Math.toDegrees(c.longitude);
-      const altKm = c.height/1000;
+      const altKm = c.height / 1000;
 
       // Velocità stimata
-      const t2 = Cesium.JulianDate.addSeconds(t,1,new Cesium.JulianDate());
+      const t2 = Cesium.JulianDate.addSeconds(t, 1, new Cesium.JulianDate());
       const p2 = satEntity.position.getValue(t2);
       let velStr = '-';
-      if (p2) velStr = Cesium.Cartesian3.distance(p1,p2).toFixed(1)+' m/s';
+      if (p2) velStr = Cesium.Cartesian3.distance(p1, p2).toFixed(1) + ' m/s';
 
       // Link Maps/OSM
-      const latFix = lat.toFixed(5), lonFix = lon.toFixed(5);
+      const latFix = lat.toFixed(5),
+        lonFix = lon.toFixed(5);
       const gmaps = `https://www.google.com/maps/@?api=1&map_action=map&center=${latFix},${lonFix}&zoom=4&basemap=satellite`;
-      const osm   = `https://www.openstreetmap.org/?mlat=${latFix}&mlon=${lonFix}#map=4/${latFix}/${lonFix}`;
+      const osm = `https://www.openstreetmap.org/?mlat=${latFix}&mlon=${lonFix}#map=4/${latFix}/${lonFix}`;
 
-      if (telemetryEl){
+      if (telemetryEl) {
         telemetryEl.innerHTML =
-          `Altitudine: ${altKm.toFixed(1)} km<br>`+
-          `Velocità: ${velStr}<br>`+
-          `Periodo: ~ (da TLE)<br>`+
-          `Lat/Lon: ${lat.toFixed(2)}°, ${lon.toFixed(2)}°<br>`+
-          `<a href="${gmaps}" target="_blank" rel="noopener">Apri in Google Maps</a> · `+
+          `Altitudine: ${altKm.toFixed(1)} km<br>` +
+          `Velocità: ${velStr}<br>` +
+          `Periodo: ~ (da TLE)<br>` +
+          `Lat/Lon: ${lat.toFixed(2)}°, ${lon.toFixed(2)}°<br>` +
+          `<a href="${gmaps}" target="_blank" rel="noopener">Apri in Google Maps</a> · ` +
           `<a href="${osm}" target="_blank" rel="noopener">OSM</a>`;
       }
 
       // Sole (subsolare)
       const s = sunECEF(t);
-      if (s && sunEl){
-        const dir = Cesium.Cartesian3.normalize(s,new Cesium.Cartesian3());
+      if (s && sunEl) {
+        const dir = Cesium.Cartesian3.normalize(s, new Cesium.Cartesian3());
         const ell = Cesium.Ellipsoid.WGS84;
-        const sub = ell.scaleToGeodeticSurface(dir,new Cesium.Cartesian3());
-        if (sub){
+        const sub = ell.scaleToGeodeticSurface(dir, new Cesium.Cartesian3());
+        if (sub) {
           const sc = ell.cartesianToCartographic(sub);
           const slat = Cesium.Math.toDegrees(sc.latitude).toFixed(2);
           const slon = Cesium.Math.toDegrees(sc.longitude).toFixed(2);
 
-          // Az/El del Sole dal sub-punto del satellite (opzionale, semplice)
+          // Az/El del Sole dal sub-punto del satellite (semplice)
           const obsECEF = Cesium.Cartesian3.fromRadians(c.longitude, c.latitude, 0);
           const enu = Cesium.Transforms.eastNorthUpToFixedFrame(obsECEF);
           const inv = Cesium.Matrix4.inverse(enu, new Cesium.Matrix4());
-          const sunPoint = new Cesium.Cartesian3(dir.x*1e7, dir.y*1e7, dir.z*1e7);
+          const sunPoint = new Cesium.Cartesian3(dir.x * 1e7, dir.y * 1e7, dir.z * 1e7);
           const local = Cesium.Matrix4.multiplyByPoint(inv, sunPoint, new Cesium.Cartesian3());
-          const e = local.x, n = local.y, u = local.z;
-          const az = (Math.atan2(e,n)*180/Math.PI + 360) % 360;
-          const elv = Math.asin(u / Math.sqrt(e*e+n*n+u*u))*180/Math.PI;
+          const e = local.x,
+            n = local.y,
+            u = local.z;
+          const az = (Math.atan2(e, n) * 180) / Math.PI;
+          const elv =
+            (Math.asin(u / Math.sqrt(e * e + n * n + u * u)) * 180) / Math.PI;
 
-          setText(sunEl, `Subsolare: ${slat}°, ${slon}°\nAzimut/Elev: ${az.toFixed(1)}°, ${elv.toFixed(1)}°`);
+          setText(
+            sunEl,
+            `Subsolare: ${slat}°, ${slon}°\nAzimut/Elev: ${((az + 360) % 360).toFixed(
+              1
+            )}°, ${elv.toFixed(1)}°`
+          );
         }
       }
-    }catch(_){ /* silenzioso */ }
+    } catch (_) {
+      /* silenzioso */
+    }
   });
 })();
