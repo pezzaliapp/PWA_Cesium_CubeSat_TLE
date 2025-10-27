@@ -3,6 +3,14 @@
  */
 'use strict';
 
+// iOS fullheight fix
+(function(){
+  const setVH = () => document.documentElement.style.setProperty('--vh', window.innerHeight * 0.01 + 'px');
+  window.addEventListener('resize', setVH);
+  window.addEventListener('orientationchange', setVH);
+  setVH();
+})();
+
 if (typeof window.satellite === 'undefined') {
   document.getElementById('status').textContent = 'Errore: satellite.js non caricato';
   console.error('satellite.js global not found');
