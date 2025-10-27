@@ -38,14 +38,38 @@ footer{text-align:center;padding:12px;color:var(--mut)}
   margin:12px 0;
 }
 
+/* === VIEWER: fix iOS tap + hit-test === */
 #viewer{
+  position:relative;
   width:100%;
   height:calc(var(--vh,1vh)*70); /* mantiene proporzione anche su iOS */
   min-height:60vh;
   border-radius:12px;
   border:1px solid var(--line);
-  overflow:hidden;
+  overflow:visible;            /* <— importante: NO hidden su iOS */
   z-index:1;
+  background:#000;
+}
+
+/* Mantieni gli angoli arrotondati al canvas senza usare overflow hidden */
+.cesium-widget, .cesium-widget canvas{ border-radius:12px; }
+
+/* Toolbar Cesium sempre “sopra” e cliccabile su iOS */
+.cesium-viewer-toolbar,
+.cesium-sceneModePicker-wrapper,
+.cesium-home-button,
+.cesium-navigationHelpButton-wrapper,
+.cesium-viewer-fullscreenContainer{
+  z-index:5 !important;
+  pointer-events:auto !important;
+}
+
+/* Pannelli tuoi non devono coprire i controlli Cesium */
+.card.controls{ position:relative; z-index:0; }
+
+/* iOS: forza un layer proprio per evitare glitch */
+@supports (-webkit-touch-callout: none){
+  #viewer{ -webkit-transform:translateZ(0); }
 }
 
 textarea,input,button,pre{
