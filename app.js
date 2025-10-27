@@ -71,6 +71,11 @@ viewer.clock.clockStep = Cesium.ClockStep.SYSTEM_CLOCK_MULTIPLIER;
 viewer.clock.multiplier = 60;
 viewer.clock.shouldAnimate = false;
 
+// iOS: assicurati che la scena si aggiorni davvero
+viewer.scene.requestRenderMode = true;
+viewer.scene.maximumRenderTimeChange = Infinity;
+viewer.clock.onTick.addEventListener(() => viewer.scene.requestRender());
+
 // Entities
 let satEntity = null;
 
