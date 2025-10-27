@@ -1,2 +1,64 @@
-:root{--bg:#0b1022;--ink:#eaf1ff}
-body{background:var(--bg);color:var(--ink)}
+/* CubeSat Orbit v5b — layout mobile-safe */
+:root{
+  --bg:#0b1022;--ink:#eaf1ff;--mut:#93a4cc;--line:#1c2550;--card:#101739;
+  --vh:1vh;
+}
+html,body{
+  height:100%;
+  margin:0;
+  background:radial-gradient(1200px 600px at 50% -20%, #172042, var(--bg));
+  color:var(--ink);
+  font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial;
+}
+
+/* Fix per altezza su iPhone */
+body::before{
+  content:"";
+  position:fixed;
+  top:0;left:0;right:0;bottom:0;
+  background:transparent;
+  pointer-events:none;
+}
+
+#app{display:flex;flex-direction:column;height:calc(var(--vh,1vh)*100)}
+header{
+  position:sticky;top:0;
+  background:#0e1533cc;backdrop-filter:blur(6px);
+  padding:12px;border-bottom:1px solid var(--line);
+  text-align:center;font-weight:600;
+}
+main{flex:1;overflow:auto;padding:8px}
+footer{text-align:center;padding:12px;color:var(--mut)}
+
+.card{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:16px;
+  margin:12px 0;
+}
+
+#viewer{
+  width:100%;
+  height:calc(var(--vh,1vh)*70); /* mantiene proporzione anche su iOS */
+  min-height:60vh;
+  border-radius:12px;
+  border:1px solid var(--line);
+  overflow:hidden;
+  z-index:1;
+}
+
+textarea,input,button,pre{
+  width:100%;
+  background:#0f1840;
+  color:var(--ink);
+  border:1px solid var(--line);
+  border-radius:10px;
+  font-family:ui-monospace,monospace;
+}
+textarea{min-height:100px;padding:10px}
+button{cursor:pointer;padding:10px;margin:4px 2px}
+pre{padding:10px;white-space:pre-wrap;overflow:auto}
+
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pill{display:inline-block;margin-top:8px;padding:4px 10px;border:1px solid var(--line);border-radius:999px}
